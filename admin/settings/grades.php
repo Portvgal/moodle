@@ -2,6 +2,16 @@
 
 // This file defines settingpages and externalpages under the "grades" section
 
+$ADMIN->add('grades', new admin_category('gradingformsettings', new lang_string('gradingmethods', 'grading')));
+
+if ($hassiteconfig) {
+    $gradingformplugins = core_plugin_manager::instance()->get_plugins_of_type('gradingform');
+    core_collator::asort_objects_by_property($gradingformplugins, 'displayname');
+    foreach ($gradingformplugins as $gradingformplugin) {
+        $gradingformplugin->load_settings($ADMIN, 'gradingformsettings', $hassiteconfig);
+    }
+}
+
 if (has_capability('moodle/grade:manage', $systemcontext)
  or has_capability('moodle/grade:manageletters', $systemcontext)) { // speedup for non-admins, add all caps used on this page
 
@@ -222,4 +232,3 @@ if (has_capability('moodle/grade:manage', $systemcontext)
     }
 
 } // end of speedup
-
