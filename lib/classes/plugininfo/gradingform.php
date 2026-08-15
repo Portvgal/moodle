@@ -30,6 +30,50 @@ defined('MOODLE_INTERNAL') || die();
  */
 class gradingform extends base {
 
+    /**
+     * Return the administration settings section identifier for this plugin.
+     *
+     * @return string
+     */
+    public function get_settings_section_name() {
+        return 'gradingformsetting' . $this->name;
+    }
+
+    /**
+     * Load this grading form plugin's administration settings.
+     *
+     * @param \part_of_admin_tree $adminroot
+     * @param string $parentnodename
+     * @param bool $hassiteconfig
+     */
+    public function load_settings(\part_of_admin_tree $adminroot, $parentnodename, $hassiteconfig) {
+        global $CFG, $USER, $DB, $OUTPUT, $PAGE;
+
+        /** @var \admin_root $ADMIN */
+        $ADMIN = $adminroot;
+        $plugininfo = $this;
+
+        if (!$this->is_installed_and_upgraded() || !$hassiteconfig) {
+            return;
+        }
+
+        $settingsfile = $this->full_path('settings.php');
+        if (!file_exists($settingsfile)) {
+            return;
+        }
+
+        $settings = new \admin_settingpage(
+            $this->get_settings_section_name(),
+            $this->displayname,
+            'moodle/site:config'
+        );
+        include($settingsfile);
+
+        if ($settings) {
+            $ADMIN->add($parentnodename, $settings);
+        }
+    }
+
     public function is_uninstall_allowed() {
         return true;
     }
