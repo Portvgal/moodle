@@ -8,6 +8,15 @@ $ADMIN->add('grades', new admin_category('gradereports', new lang_string('report
 $ADMIN->add('grades', new admin_category('gradeimports', new lang_string('importsettings', 'grades')));
 $ADMIN->add('grades', new admin_category('gradeexports', new lang_string('exportsettings', 'grades')));
 $ADMIN->add('grades', new admin_category('gradepenalty', new lang_string('gradepenalty', 'grades')));
+$ADMIN->add('grades', new admin_category('gradingformsettings', new lang_string('gradingmethods', 'grading')));
+
+if ($hassiteconfig) {
+    $gradingformplugins = core_plugin_manager::instance()->get_plugins_of_type('gradingform');
+    core_collator::asort_objects_by_property($gradingformplugins, 'displayname');
+    foreach ($gradingformplugins as $gradingformplugin) {
+        $gradingformplugin->load_settings($ADMIN, 'gradingformsettings', $hassiteconfig);
+    }
+}
 
 if (has_capability('moodle/grade:manage', $systemcontext)
  or has_capability('moodle/grade:manageletters', $systemcontext)) { // speedup for non-admins, add all caps used on this page
