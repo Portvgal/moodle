@@ -1,0 +1,17 @@
+issueNumber: MDL-67322
+notes:
+  mod_assign:
+    - message: >-
+        Assignment user and group overrides now support maxattempts through
+        override_manager and the mod_assign_save_overrides and
+        mod_assign_get_overrides external functions. The nullable
+        assign_overrides.maxattempts column accepts 1 to 30 or -1 for unlimited.
+        Null, omitted values and values matching the assignment default inherit
+        that default; omission on update by ID resets the limit. When saving
+        without an ID for an existing target, the existing override merge
+        behaviour is preserved. Existing user and ordered group override
+        precedence is preserved.
+        mod_assign_get_assignments returns the effective limit for the current
+        user. Increasing a manual limit does not reopen a submission
+        automatically.
+      type: improved

@@ -388,6 +388,7 @@ $string['invalidgradeforscale'] = 'The grade supplied was not valid for the curr
 $string['invalidfloatforgrade'] = 'The grade provided could not be understood: {$a}';
 $string['invalidgroupid'] = 'Invalid group ID';
 $string['invalidmarkerallocation:notenoughmarkers'] = 'There are not enough markers ({$a->markers}) to meet the required number for this assignment ({$a->requested}).';
+$string['invalidmaxattemptsoverride'] = 'Allowed attempts must be between 1 and 30, or unlimited.';
 $string['invalidoverrideid'] = 'Invalid override id';
 $string['invaliduserid'] = 'Invalid user ID';
 $string['lastmodifiedsubmission'] = 'Last modified (submission)';

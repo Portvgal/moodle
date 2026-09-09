@@ -187,6 +187,7 @@ class backup_assign_activity_structure_step extends backup_activity_structure_st
             'duedate',
             'cutoffdate',
             'timelimit',
+            'maxattempts',
             'reason',
             'reasonformat',
         ]);

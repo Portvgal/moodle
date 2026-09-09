@@ -223,7 +223,7 @@ class assign_grading_table extends table_sql implements renderable {
                 $fields .= 'effective.duedate, ';
             }
 
-            $fields .= 'effective.cutoffdate ';
+            $fields .= 'effective.cutoffdate, effective.maxattempts ';
 
             $from .= ' LEFT JOIN (
                SELECT merged.userid, min(merged.priority) priority FROM (
@@ -251,7 +251,8 @@ class assign_grading_table extends table_sql implements renderable {
                       u.id AS userid,
                       a.allowsubmissionsfromdate,
                       a.duedate,
-                      a.cutoffdate
+                      a.cutoffdate,
+                      a.maxattempts
                  FROM {user} u
                  JOIN {assign} a ON a.id = :assignmentid7
                  '.$userwhere2.'
@@ -261,7 +262,8 @@ class assign_grading_table extends table_sql implements renderable {
                       uo.userid,
                       uo.allowsubmissionsfromdate,
                       uo.duedate,
-                      uo.cutoffdate
+                      uo.cutoffdate,
+                      uo.maxattempts
                  FROM {assign_overrides} uo
                 WHERE uo.assignid = :assignmentid8
               )
@@ -270,7 +272,8 @@ class assign_grading_table extends table_sql implements renderable {
                       gm.userid,
                       go.allowsubmissionsfromdate,
                       go.duedate,
-                      go.cutoffdate
+                      go.cutoffdate,
+                      go.maxattempts
                  FROM {assign_overrides} go
                  JOIN {groups} g ON g.id = go.groupid
                  JOIN {groups_members} gm ON gm.groupid = g.id
@@ -1452,11 +1455,13 @@ class assign_grading_table extends table_sql implements renderable {
                 $menu->add(new action_menu_link_secondary($baseactionurl, null, $description));
             }
 
-            $ismanual = $this->assignment->get_instance()->attemptreopenmethod == ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL;
+            $instance = $this->assignment->get_default_instance();
+            $maxattempts = $row->maxattempts ?? $instance->maxattempts;
+            $ismanual = $instance->attemptreopenmethod == ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL;
             $hassubmission = !empty($row->status);
             $notreopened = $hassubmission && $row->status != ASSIGN_SUBMISSION_STATUS_REOPENED;
-            $isunlimited = $this->assignment->get_instance()->maxattempts == ASSIGN_UNLIMITED_ATTEMPTS;
-            $hasattempts = $isunlimited || $row->attemptnumber < $this->assignment->get_instance()->maxattempts - 1;
+            $isunlimited = $maxattempts == ASSIGN_UNLIMITED_ATTEMPTS;
+            $hasattempts = $isunlimited || $row->attemptnumber < $maxattempts - 1;
 
             if ($ismanual && $hassubmission && $notreopened && $hasattempts) {
                 // Allow another attempt action link.
@@ -1778,11 +1783,13 @@ class assign_grading_table extends table_sql implements renderable {
             );
         }
 
-        $ismanual = $this->assignment->get_instance()->attemptreopenmethod == ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL;
+        $instance = $this->assignment->get_default_instance();
+        $maxattempts = $row->maxattempts ?? $instance->maxattempts;
+        $ismanual = $instance->attemptreopenmethod == ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL;
         $hassubmission = !empty($row->status);
         $notreopened = $hassubmission && $row->status != ASSIGN_SUBMISSION_STATUS_REOPENED;
-        $isunlimited = $this->assignment->get_instance()->maxattempts == ASSIGN_UNLIMITED_ATTEMPTS;
-        $hasattempts = $isunlimited || $row->attemptnumber < $this->assignment->get_instance()->maxattempts - 1;
+        $isunlimited = $maxattempts == ASSIGN_UNLIMITED_ATTEMPTS;
+        $hasattempts = $isunlimited || $row->attemptnumber < $maxattempts - 1;
 
         if ($ismanual && $hassubmission && $notreopened && $hasattempts) {
             $urlparams = array('id' => $this->assignment->get_course_module()->id,

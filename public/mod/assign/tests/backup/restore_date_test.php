@@ -50,11 +50,13 @@ final class restore_date_test extends \restore_date_testcase {
             'groupid' => 0,
             'userid' => $USER->id,
             'sortorder' => 1,
-            'allowsubmissionsfromdate' => 100,
+            'allowsubmissionsfromdate' => 101,
             'duedate' => 200,
-            'cutoffdate' => 300
+            'cutoffdate' => 300,
+            'maxattempts' => 4,
         ];
-        $DB->insert_record('assign_overrides', $override);
+        $manager = new \mod_assign\override_manager($assign, \context_module::instance($cm->id));
+        $manager->save_overrides([(array) $override]);
 
         // Do backup and restore.
         $newcourseid = $this->backup_and_restore($course);
@@ -77,6 +79,7 @@ final class restore_date_test extends \restore_date_testcase {
         $this->assertEquals($override->duedate + $diff, $newoverride->duedate);
         $this->assertEquals($override->cutoffdate + $diff, $newoverride->cutoffdate);
         $this->assertEquals($override->allowsubmissionsfromdate + $diff, $newoverride->allowsubmissionsfromdate);
+        $this->assertEquals($override->maxattempts, $newoverride->maxattempts);
 
         // Assign grade time checks.
         $this->assertEquals($grade->timecreated, $newgrade->timecreated);

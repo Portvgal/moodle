@@ -163,6 +163,7 @@
         <FIELD NAME="duedate" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Time by which students must have completed their attempt.  Can be null, in which case the assign default is used."/>
         <FIELD NAME="cutoffdate" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Time by which students must have completed their attempt.  Can be null, in which case the assign default is used."/>
         <FIELD NAME="timelimit" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Time limit in seconds. Can be null, in which case the quiz default is used."/>
+        <FIELD NAME="maxattempts" TYPE="int" LENGTH="6" NOTNULL="false" SEQUENCE="false" COMMENT="What is the maximum number of student attempts allowed for this assignment override? -1 means unlimited. Can be null, in which case the assign default is used."/>
         <FIELD NAME="reason" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="An optional reason explaining why this override was granted."/>
         <FIELD NAME="reasonformat" TYPE="int" LENGTH="2" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="The internal format for the override reason."/>
       </FIELDS>

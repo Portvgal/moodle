@@ -47,6 +47,12 @@ class save_overrides extends external_api {
             'duedate' => new external_value(PARAM_INT, 'Assignment override due date', VALUE_DEFAULT, null),
             'cutoffdate' => new external_value(PARAM_INT, 'Assignment override cutoff date', VALUE_DEFAULT, null),
             'timelimit' => new external_value(PARAM_INT, 'Assignment override time limit', VALUE_DEFAULT, null),
+            'maxattempts' => new external_value(
+                PARAM_INT,
+                'Allowed attempts: 1 to 30, -1 for unlimited; null or omitted inherits the assignment default when updating by id',
+                VALUE_DEFAULT,
+                null
+            ),
             'reason' => new external_value(PARAM_RAW, 'Assignment override reason', VALUE_OPTIONAL),
             'reasonformat' => new external_format_value('reason', VALUE_DEFAULT, FORMAT_MOODLE),
         ]);

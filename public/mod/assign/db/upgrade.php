@@ -294,5 +294,19 @@ function xmldb_assign_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026082700, 'assign');
     }
 
+    if ($oldversion < 2026101000) {
+        // Define field maxattempts to be added to assign_overrides.
+        $table = new xmldb_table('assign_overrides');
+        $field = new xmldb_field('maxattempts', XMLDB_TYPE_INTEGER, '6', null, null, null, null, 'timelimit');
+
+        // Conditionally launch add field maxattempts.
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // Assign savepoint reached.
+        upgrade_mod_savepoint(true, 2026101000, 'assign');
+    }
+
     return true;
 }

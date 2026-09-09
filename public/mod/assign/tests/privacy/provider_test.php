@@ -231,7 +231,11 @@ final class provider_test extends provider_testcase {
         $overridedata->cutoffdate = time();
         $overridedata->reason = 'This is a reason';
         $overridedata->reasonformat = FORMAT_MOODLE;
-        $DB->insert_record('assign_overrides', $overridedata);
+        $overridedata->allowsubmissionsfromdate = $overridedata->duedate - DAYSECS;
+        $overridedata->cutoffdate = $overridedata->duedate + DAYSECS;
+        $overridedata->maxattempts = 4;
+        $manager = new \mod_assign\override_manager($assign->get_default_instance(), $context);
+        $manager->save_overrides([(array) $overridedata]);
 
         // Allocate the teacher as a marker on the assignment.
         $assign->update_marker_allocations($user->id, [1 => [$teacher->id]]);
@@ -291,6 +295,7 @@ final class provider_test extends provider_testcase {
 
         // Check override data was exported correctly.
         $overrideexport = $writer->get_data(['Overrides']);
+        $this->assertEquals(4, $overrideexport->maxattempts);
         $this->assertEquals(\core_privacy\local\request\transform::datetime($overridedata->duedate),
                 $overrideexport->duedate);
         $this->assertEquals(\core_privacy\local\request\transform::datetime($overridedata->cutoffdate),

@@ -3129,6 +3129,425 @@ You can see it appended to your <a href="' . $assignurl .
     }
 
     /**
+     * Test that a user override can allow one more manual attempt than the assignment default.
+     */
+    public function test_user_override_maxattempts_allows_manual_extra_attempt(): void {
+        global $DB, $PAGE;
+
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'teacher');
+
+        $assign = $this->create_instance($course, [
+            'attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL,
+            'maxattempts' => 3,
+            'submissiondrafts' => 1,
+            'assignsubmission_onlinetext_enabled' => 1,
+        ]);
+        $PAGE->set_url(new \moodle_url('/mod/assign/view.php', ['id' => $assign->get_course_module()->id]));
+
+        $teacher->ignoresesskey = true;
+        $this->create_graded_attempt($student, $teacher, $assign, 0);
+        $this->setUser($teacher);
+        $this->assertTrue($assign->testable_process_add_attempt($student->id));
+
+        $this->create_graded_attempt($student, $teacher, $assign, 1);
+        $this->setUser($teacher);
+        $this->assertTrue($assign->testable_process_add_attempt($student->id));
+
+        $this->create_graded_attempt($student, $teacher, $assign, 2);
+        $this->setUser($teacher);
+        $this->assertFalse($assign->testable_process_add_attempt($student->id));
+
+        $manager = new override_manager($assign->get_default_instance(), $assign->get_context());
+        $manager->save_overrides([['userid' => $student->id, 'maxattempts' => 4]]);
+
+        $this->assertTrue($assign->testable_process_add_attempt($student->id));
+        $submission = $assign->get_user_submission($student->id, false);
+        $this->assertEquals(3, $submission->attemptnumber);
+    }
+
+    /**
+     * Test that a group override can allow one more manual attempt than the assignment default.
+     */
+    public function test_group_override_maxattempts_allows_manual_extra_attempt(): void {
+        global $DB, $PAGE;
+
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'teacher');
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        groups_add_member($group, $student);
+
+        $assign = $this->create_instance($course, [
+            'attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL,
+            'maxattempts' => 3,
+            'submissiondrafts' => 1,
+            'assignsubmission_onlinetext_enabled' => 1,
+        ]);
+        $PAGE->set_url(new \moodle_url('/mod/assign/view.php', ['id' => $assign->get_course_module()->id]));
+
+        $teacher->ignoresesskey = true;
+        $this->create_graded_attempt($student, $teacher, $assign, 0);
+        $this->setUser($teacher);
+        $this->assertTrue($assign->testable_process_add_attempt($student->id));
+
+        $this->create_graded_attempt($student, $teacher, $assign, 1);
+        $this->setUser($teacher);
+        $this->assertTrue($assign->testable_process_add_attempt($student->id));
+
+        $this->create_graded_attempt($student, $teacher, $assign, 2);
+        $this->setUser($teacher);
+        $this->assertFalse($assign->testable_process_add_attempt($student->id));
+
+        $manager = new override_manager($assign->get_default_instance(), $assign->get_context());
+        $manager->save_overrides([['groupid' => $group->id, 'maxattempts' => 4]]);
+
+        $this->assertTrue($assign->testable_process_add_attempt($student->id));
+        $submission = $assign->get_user_submission($student->id, false);
+        $this->assertEquals(3, $submission->attemptnumber);
+    }
+
+    /**
+     * Test that an unlimited attempts override can allow attempts when the assignment default does not.
+     */
+    public function test_user_override_unlimited_maxattempts_allows_attempt_when_default_disallows(): void {
+        global $DB, $PAGE;
+
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'teacher');
+
+        $assign = $this->create_instance($course, [
+            'attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL,
+            'maxattempts' => 1,
+            'submissiondrafts' => 1,
+            'assignsubmission_onlinetext_enabled' => 1,
+        ]);
+        $PAGE->set_url(new \moodle_url('/mod/assign/view.php', ['id' => $assign->get_course_module()->id]));
+
+        $teacher->ignoresesskey = true;
+        $this->create_graded_attempt($student, $teacher, $assign, 0);
+        $this->setUser($teacher);
+        $this->assertFalse($assign->testable_process_add_attempt($student->id));
+
+        $manager = new override_manager($assign->get_default_instance(), $assign->get_context());
+        $manager->save_overrides([['userid' => $student->id, 'maxattempts' => ASSIGN_UNLIMITED_ATTEMPTS]]);
+
+        $this->assertTrue($assign->testable_process_add_attempt($student->id));
+    }
+
+    /**
+     * Test that the bulk grant attempt action is available when a group override allows extra attempts.
+     */
+    public function test_group_override_maxattempts_allows_bulk_grant_attempt_action(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $otherstudent = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        groups_add_member($group, $student);
+
+        $assign = $this->create_instance($course, [
+            'attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL,
+            'maxattempts' => 1,
+            'submissiondrafts' => 1,
+            'assignsubmission_onlinetext_enabled' => 1,
+        ]);
+
+        $this->assertFalse($assign->testable_has_bulk_grant_attempt_available([$student->id, $otherstudent->id]));
+
+        $manager = new override_manager($assign->get_default_instance(), $assign->get_context());
+        $manager->save_overrides([['groupid' => $group->id, 'maxattempts' => 3]]);
+
+        $this->assertTrue($assign->testable_has_bulk_grant_attempt_available([$student->id, $otherstudent->id]));
+        $this->assertFalse($assign->testable_has_bulk_grant_attempt_available([$otherstudent->id]));
+    }
+
+    /**
+     * Test that the bulk grant attempt action is unavailable when no override allows extra attempts.
+     */
+    public function test_bulk_grant_attempt_action_unavailable_without_extra_attempts(): void {
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+
+        $assign = $this->create_instance($course, [
+            'attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL,
+            'maxattempts' => 1,
+            'submissiondrafts' => 1,
+            'assignsubmission_onlinetext_enabled' => 1,
+        ]);
+
+        $this->assertFalse($assign->testable_has_bulk_grant_attempt_available([$student->id]));
+    }
+
+    /**
+     * Test that an attempts override does not expose bulk grant attempt unless reopening is manual.
+     */
+    public function test_bulk_grant_attempt_action_unavailable_when_reopening_is_not_manual(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+
+        $assign = $this->create_instance($course, [
+            'attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_AUTOMATIC,
+            'maxattempts' => 1,
+            'submissiondrafts' => 1,
+            'assignsubmission_onlinetext_enabled' => 1,
+        ]);
+
+        $manager = new override_manager($assign->get_default_instance(), $assign->get_context());
+        $manager->save_overrides([['userid' => $student->id, 'maxattempts' => 3]]);
+
+        $this->assertFalse($assign->testable_has_bulk_grant_attempt_available([$student->id]));
+    }
+
+    /**
+     * Bulk resolution must match individual resolution without participant-sized query growth.
+     */
+    public function test_bulk_maxattempts_priority_and_queries(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $assign = $this->create_instance($course, [
+            'maxattempts' => 1,
+            'attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL,
+        ]);
+        $group = $generator->create_group(['courseid' => $course->id]);
+        $othergroup = $generator->create_group(['courseid' => $course->id]);
+        $userids = [];
+        for ($i = 0; $i < 20; $i++) {
+            $student = $generator->create_and_enrol($course, 'student');
+            $userids[] = $student->id;
+            groups_add_member($group, $student);
+            groups_add_member($othergroup, $student);
+        }
+        $manager = new override_manager($assign->get_default_instance(), $assign->get_context());
+        $first = $manager->save_overrides([['groupid' => $group->id, 'maxattempts' => 1]])[0];
+        $second = $manager->save_overrides([['groupid' => $othergroup->id, 'maxattempts' => 4]])[0];
+        $before = $DB->perf_get_queries();
+        $this->assertSame([], $assign->testable_get_effective_maxattempts([]));
+        $this->assertEquals(0, $DB->perf_get_queries() - $before);
+        foreach ([[$userids[0]], $userids] as $participants) {
+            $before = $DB->perf_get_queries();
+            $limits = $assign->testable_get_effective_maxattempts($participants);
+            $queries = $DB->perf_get_queries() - $before;
+            $this->assertEquals(array_fill_keys($participants, 1), $limits);
+            $this->assertEquals(2, $queries);
+        }
+
+        $manager->move_group_override($second, 'up');
+        $this->assertEquals(4, $assign->testable_get_effective_maxattempts([$userids[0], $userids[0]])[$userids[0]]);
+        $this->assertTrue($assign->testable_has_bulk_grant_attempt_available($userids));
+        $assign->update_effective_access($userids[0]);
+        $this->assertEquals(4, $assign->get_instance($userids[0])->maxattempts);
+
+        // A dates-only user override wins over the group, falling back to the assignment limit.
+        $useroverride = $manager->save_overrides([['userid' => $userids[0], 'duedate' => time() + DAYSECS]])[0];
+        $this->assertEquals(1, $assign->testable_get_effective_maxattempts([$userids[0]])[$userids[0]]);
+        $this->assertFalse($assign->testable_has_bulk_grant_attempt_available([$userids[0]]));
+        $assign->update_effective_access($userids[0]);
+        $this->assertEquals(1, $assign->get_instance($userids[0])->maxattempts);
+        $manager->delete_overrides_by_id([$useroverride]);
+        $this->assertTrue($assign->testable_has_bulk_grant_attempt_available([$userids[0]]));
+        $manager->delete_overrides_by_id([$first, $second]);
+        $assign->update_effective_access($userids[0]);
+        $this->assertEquals(1, $assign->get_instance($userids[0])->maxattempts);
+        $before = $DB->perf_get_queries();
+        $available = $assign->testable_has_bulk_grant_attempt_available($userids);
+        $queries = $DB->perf_get_queries() - $before;
+        $this->assertFalse($available);
+        $this->assertEquals(1, $queries);
+    }
+
+    /**
+     * Manual grading does not resolve attempt overrides unless another attempt was requested.
+     */
+    public function test_manual_reopen_skips_unused_override_queries(): void {
+        global $PAGE;
+
+        $this->resetAfterTest();
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $teacher = $this->getDataGenerator()->create_and_enrol($course, 'teacher');
+        $assign = $this->create_instance($course, [
+            'attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL,
+            'maxattempts' => 1,
+            'submissiondrafts' => 1,
+            'assignsubmission_onlinetext_enabled' => 1,
+        ]);
+        $PAGE->set_url(new \moodle_url('/mod/assign/view.php', ['id' => $assign->get_course_module()->id]));
+        $manager = new override_manager($assign->get_default_instance(), $assign->get_context());
+        $manager->save_overrides([['userid' => $student->id, 'maxattempts' => 2]]);
+
+        $this->create_graded_attempt($student, $teacher, $assign, 0);
+        $submission = $assign->get_user_submission($student->id, false);
+        $assign->overrideexistscalls = 0;
+
+        $this->assertFalse($assign->testable_reopen_submission_if_required($student->id, $submission, false));
+        $this->assertEquals(0, $assign->overrideexistscalls);
+
+        $this->setUser($teacher);
+        $this->assertTrue($assign->testable_reopen_submission_if_required($student->id, $submission, true));
+        $this->assertEquals(1, $assign->overrideexistscalls);
+        $this->assertEquals(1, $assign->get_user_submission($student->id, false)->attemptnumber);
+    }
+
+    /**
+     * Bulk add-attempt processing resolves limits once regardless of participant count.
+     */
+    public function test_bulk_add_attempt_uses_constant_override_queries(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $generator = $this->getDataGenerator();
+        $querycounts = [];
+
+        foreach ([1, 20, 200] as $participantcount) {
+            $course = $generator->create_course();
+            $teacher = $generator->create_and_enrol($course, 'teacher');
+            $group = $generator->create_group(['courseid' => $course->id]);
+            $assign = $this->create_instance($course, [
+                'attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL,
+                'maxattempts' => 1,
+            ]);
+            $manager = new override_manager($assign->get_default_instance(), $assign->get_context());
+            $manager->save_overrides([['groupid' => $group->id, 'maxattempts' => 1]]);
+            $userids = [];
+
+            for ($i = 0; $i < $participantcount; $i++) {
+                $student = $generator->create_and_enrol($course, 'student');
+                groups_add_member($group, $student);
+                $userids[] = $student->id;
+            }
+
+            $teacher->ignoresesskey = true;
+            $this->setUser($teacher);
+            $assign->bulkresolvercalls = 0;
+            $assign->overrideexistscalls = 0;
+            has_capability('mod/assign:grade', $assign->get_context());
+            $before = $DB->perf_get_queries();
+            $this->assertEquals('grading', $assign->testable_process_grading_batch_operation('addattempt', $userids));
+            $queries = $DB->perf_get_queries() - $before;
+
+            $this->assertEquals(1, $assign->bulkresolvercalls);
+            $this->assertEquals(0, $assign->overrideexistscalls);
+            $querycounts[] = $queries;
+        }
+
+        $this->assertEquals(array_fill(0, 3, $querycounts[0]), $querycounts);
+    }
+
+    /**
+     * Team bulk add-attempt processing also bypasses the single-user resolver.
+     */
+    public function test_team_bulk_add_attempt_uses_bulk_override_resolution(): void {
+        $this->resetAfterTest();
+        $generator = $this->getDataGenerator();
+
+        foreach ([1, 20, 200] as $participantcount) {
+            $course = $generator->create_course();
+            $teacher = $generator->create_and_enrol($course, 'teacher');
+            $group = $generator->create_group(['courseid' => $course->id]);
+            $assign = $this->create_instance($course, [
+                'attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL,
+                'maxattempts' => 1,
+                'teamsubmission' => 1,
+            ]);
+            $manager = new override_manager($assign->get_default_instance(), $assign->get_context());
+            $manager->save_overrides([['groupid' => $group->id, 'maxattempts' => 1]]);
+            $userids = [];
+
+            for ($i = 0; $i < $participantcount; $i++) {
+                $student = $generator->create_and_enrol($course, 'student');
+                groups_add_member($group, $student);
+                $userids[] = $student->id;
+            }
+
+            $teacher->ignoresesskey = true;
+            $this->setUser($teacher);
+            $assign->bulkresolvercalls = 0;
+            $assign->overrideexistscalls = 0;
+            $this->assertEquals('grading', $assign->testable_process_grading_batch_operation('addattempt', $userids));
+            $this->assertEquals(1, $assign->bulkresolvercalls);
+            $this->assertEquals(0, $assign->overrideexistscalls);
+        }
+    }
+
+    /**
+     * The grading table's bulk query resolves the same limit as individual access.
+     */
+    public function test_grading_table_maxattempts(): void {
+        global $PAGE;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $teacher = $generator->create_and_enrol($course, 'editingteacher');
+        $student = $generator->create_and_enrol($course, 'student');
+        $otherstudent = $generator->create_and_enrol($course, 'student');
+        $group = $generator->create_group(['courseid' => $course->id]);
+        groups_add_member($group, $student);
+        $assign = $this->create_instance($course, [
+            'maxattempts' => 1,
+            'attemptreopenmethod' => ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL,
+        ]);
+        $this->setUser($teacher);
+        $PAGE->set_url(new \moodle_url('/mod/assign/view.php', ['id' => $assign->get_course_module()->id]));
+        $manager = new override_manager($assign->get_default_instance(), $assign->get_context());
+        $manager->save_overrides([['groupid' => $group->id, 'maxattempts' => 4]]);
+        $useroverrideid = null;
+        foreach ([4, ASSIGN_UNLIMITED_ATTEMPTS, null] as $value) {
+            if ($value !== 4) {
+                $useroverrideid = $manager->save_overrides([[
+                    'id' => $useroverrideid,
+                    'userid' => $student->id,
+                    'maxattempts' => $value,
+                ]])[0];
+            }
+            $table = new \assign_grading_table($assign, 20, '', 0, true);
+            $table->setup();
+            $table->query_db(20);
+            $limits = [];
+            foreach ($table->rawdata as $row) {
+                $limits[$row->id] = $row->maxattempts ?? $assign->get_default_instance()->maxattempts;
+                $assign->update_effective_access($row->id);
+                $this->assertEquals($assign->get_instance($row->id)->maxattempts, $limits[$row->id]);
+            }
+            $this->assertEquals($value ?? 1, $limits[$student->id]);
+            $this->assertEquals(1, $limits[$otherstudent->id]);
+        }
+    }
+
+    /**
+     * Create, submit, and grade one assignment attempt.
+     *
+     * @param \stdClass $student The student user.
+     * @param \stdClass $teacher The teacher user.
+     * @param \assign $assign The assignment instance.
+     * @param int $attemptnumber The attempt number to grade.
+     */
+    private function create_graded_attempt(\stdClass $student, \stdClass $teacher, \assign $assign, int $attemptnumber): void {
+        $this->add_submission($student, $assign, 'Submission text ' . $attemptnumber);
+        $this->submit_for_grading($student, $assign);
+
+        $this->setUser($teacher);
+        $data = new \stdClass();
+        $data->grade = '50.0';
+        $assign->testable_apply_grade_to_user($data, $student->id, $attemptnumber);
+    }
+
+    /**
      * Test reopen behavior when in "Reopen until pass" mode.
      */
     public function test_attempt_reopen_method_untilpass(): void {
@@ -4430,6 +4849,7 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
                 'duedate' => 2,
                 'cutoffdate' => 3,
                 'timelimit' => null,
+                'maxattempts' => 4,
                 'reason' => null,
                 'reasonformat' => 0,
             ],
@@ -4443,6 +4863,7 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
                 'duedate' => 6,
                 'cutoffdate' => 6,
                 'timelimit' => null,
+                'maxattempts' => 5,
                 'reason' => null,
                 'reasonformat' => 0,
             ],
@@ -4456,6 +4877,7 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
                 'duedate' => 8,
                 'cutoffdate' => 9,
                 'timelimit' => null,
+                'maxattempts' => 6,
                 'reason' => null,
                 'reasonformat' => 0,
             ],
@@ -4482,6 +4904,7 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
         $this->assertNull($override->duedate);
         $this->assertNull($override->cutoffdate);
         $this->assertNull($override->allowsubmissionsfromdate);
+        $this->assertNull($override->maxattempts);
     }
 
     /**
@@ -4518,6 +4941,7 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
 
         // Attempt to grade with a past attempts grade info.
         $assign->testable_process_add_attempt($student->id);
+        $assign->overrideexistscalls = 0;
         $data = [
             'grademodified_' . $student->id => $grade->timemodified,
             'gradeattempt_' . $student->id => $grade->attemptnumber,
@@ -4537,6 +4961,7 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
         ];
         $result = $assign->testable_process_save_quick_grades($data);
         $this->assertStringContainsString(get_string('quickgradingchangessaved', 'assign'), $result);
+        $this->assertEquals(0, $assign->overrideexistscalls);
         $grade = $assign->get_user_grade($student->id, false);
         $this->assertEquals(40.0, $grade->grade);
 
@@ -4551,6 +4976,7 @@ Anchor link 2:<a title=\"bananas\" href=\"../logo-240x60.gif\">Link text</a>
         ];
         $result = $assign->testable_process_save_quick_grades($data);
         $this->assertStringContainsString(get_string('quickgradingchangessaved', 'assign'), $result);
+        $this->assertEquals(0, $assign->overrideexistscalls);
         $grade = $assign->get_user_grade($student->id, false);
         $this->assertEquals(30.0, $grade->grade);
 

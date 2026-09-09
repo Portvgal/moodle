@@ -175,6 +175,13 @@ foreach ($overrides as $override) {
         $values[] = $override->timelimit > 0 ? format_time($override->timelimit) : get_string('none', 'assign');
     }
 
+    // Format allowed attempts.
+    if (isset($override->maxattempts)) {
+        $fields[] = get_string('maxattempts', 'assign');
+        $values[] = $override->maxattempts == ASSIGN_UNLIMITED_ATTEMPTS ?
+            get_string('unlimitedattempts', 'assign') : $override->maxattempts;
+    }
+
     // Format reason.
     if (isset($override->reason) && $override->reason !== '') {
         $formattedreason = format_text(

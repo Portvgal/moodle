@@ -77,6 +77,62 @@ final class override_manager_test extends externallib_advanced_testcase {
     }
 
     /**
+     * Test persistence, replacement and inheritance through the production manager.
+     */
+    public function test_maxattempts_persistence(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $data = $this->create_test_data();
+        $this->setUser($data['teacher']);
+        $data['assign']->maxattempts = 1;
+        $DB->set_field('assign', 'maxattempts', 1, ['id' => $data['assign']->id]);
+        $manager = new override_manager($data['assign'], $data['context']);
+
+        foreach (['userid' => $data['student1']->id, 'groupid' => $data['group1']->id] as $key => $targetid) {
+            $ids = $manager->save_overrides([[$key => $targetid, 'maxattempts' => 4]]);
+            $conditions = ['id' => $ids[0]];
+            $this->assertEquals(4, $DB->get_field('assign_overrides', 'maxattempts', $conditions));
+            foreach ([30, ASSIGN_UNLIMITED_ATTEMPTS, null, 1, '4'] as $value) {
+                $manager->save_overrides([['id' => $ids[0], $key => $targetid, 'maxattempts' => $value]]);
+                $record = $DB->get_record('assign_overrides', $conditions, '*', MUST_EXIST);
+                if ($value === null || $value === 1) {
+                    $this->assertNull($record->maxattempts);
+                } else {
+                    $this->assertEquals($value, $record->maxattempts);
+                }
+            }
+            // Like the existing date fields, omission resets the setting on update.
+            $manager->save_overrides([['id' => $ids[0], $key => $targetid, 'duedate' => time() + DAYSECS]]);
+            $record = $DB->get_record('assign_overrides', $conditions, '*', MUST_EXIST);
+            $this->assertNull($record->maxattempts);
+            $manager->delete_overrides_by_id($ids);
+            $this->assertFalse($DB->record_exists('assign_overrides', $conditions));
+        }
+    }
+
+    /**
+     * Invalid attempt limits must not be silently normalised or persisted.
+     */
+    public function test_invalid_maxattempts(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $data = $this->create_test_data();
+        $this->setUser($data['teacher']);
+        foreach ([0, -2, 31, '', false, true, 1.5, '1.5', 'invalid'] as $value) {
+            $override = ['userid' => $data['student1']->id, 'maxattempts' => $value];
+            $errors = $data['manager']->validate_data($override);
+            $this->assertArrayHasKey('maxattempts', $errors);
+            try {
+                $data['manager']->save_overrides([$override]);
+                $this->fail('Invalid allowed attempts were accepted');
+            } catch (invalid_parameter_exception $exception) {
+                $this->assertStringContainsString(get_string('invalidmaxattemptsoverride', 'assign'), $exception->getMessage());
+            }
+        }
+        $this->assertFalse($DB->record_exists('assign_overrides', ['assignid' => $data['assign']->id]));
+    }
+
+    /**
      * Test get_all_overrides returns empty array when no overrides exist.
      */
     public function test_get_all_overrides_empty(): void {

@@ -51,6 +51,49 @@ final class overrides_test extends externallib_advanced_testcase {
     use mod_assign_override_test_trait;
 
     /**
+     * Allowed attempts must survive both external parameter and return-value cleaning.
+     */
+    public function test_maxattempts_round_trip(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $data = $this->create_assign_with_overrides_test_data();
+        $this->setUser($data['teacher']);
+        $DB->set_field('assign', 'maxattempts', 1, ['id' => $data['assign']->id]);
+        foreach (['userid' => $data['student1']->id, 'groupid' => $data['group1']->id] as $key => $targetid) {
+            $id = null;
+            foreach ([4, ASSIGN_UNLIMITED_ATTEMPTS, null] as $value) {
+                $result = save_overrides::execute([
+                    'assignid' => $data['assign']->id,
+                    'overrides' => [['id' => $id, $key => $targetid, 'maxattempts' => $value]],
+                ]);
+                $result = external_api::clean_returnvalue(save_overrides::execute_returns(), $result);
+                $id = $result['ids'][0];
+                $record = $DB->get_record('assign_overrides', ['id' => $id], '*', MUST_EXIST);
+                $this->assertEquals($value, $record->maxattempts);
+                $result = get_overrides::execute($data['assign']->id);
+                $result = external_api::clean_returnvalue(get_overrides::execute_returns(), $result);
+                $records = array_column($result['overrides'], null, 'id');
+                $this->assertArrayHasKey('maxattempts', $records[$id]);
+                $this->assertSame($value, $records[$id]['maxattempts']);
+            }
+        }
+    }
+
+    /**
+     * Students cannot grant themselves extra attempts through the web service.
+     */
+    public function test_student_cannot_save_maxattempts(): void {
+        $this->resetAfterTest();
+        $data = $this->create_assign_with_overrides_test_data();
+        $this->setUser($data['student1']);
+        $this->expectException(required_capability_exception::class);
+        save_overrides::execute([
+            'assignid' => $data['assign']->id,
+            'overrides' => [['userid' => $data['student1']->id, 'maxattempts' => 4]],
+        ]);
+    }
+
+    /**
      * Test get_overrides with no overrides.
      */
     public function test_get_overrides_empty(): void {

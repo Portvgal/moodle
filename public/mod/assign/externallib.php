@@ -460,7 +460,7 @@ class mod_assign_external extends \mod_assign\external\external_api {
                     $assignment['hidegrader'] = $module->hidegrader;
                     $assignment['revealidentities'] = $module->revealidentities;
                     $assignment['attemptreopenmethod'] = $module->attemptreopenmethod;
-                    $assignment['maxattempts'] = $module->maxattempts;
+                    $assignment['maxattempts'] = $assign->get_instance()->maxattempts;
                     $assignment['markingworkflow'] = $module->markingworkflow;
                     $assignment['markingallocation'] = $module->markingallocation;
                     $assignment['markercount'] = $module->markercount;

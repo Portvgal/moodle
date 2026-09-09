@@ -48,6 +48,7 @@ class override_manager {
         'cutoffdate',
         'allowsubmissionsfromdate',
         'timelimit',
+        'maxattempts',
     ];
 
     /** @var array override-only setting keys (not present on the assignment itself) **/
@@ -124,6 +125,18 @@ class override_manager {
         $formdata = (object) $formdata;
 
         $errors = [];
+
+        // Validate before normalisation can turn an invalid value into inheritance.
+        $maxattempts = $originalformdata['maxattempts'] ?? null;
+        if ($maxattempts !== null) {
+            $validinteger = is_int($maxattempts) || (is_string($maxattempts) && preg_match('/^-?[0-9]+$/D', $maxattempts));
+            if (
+                !$validinteger ||
+                ((int) $maxattempts !== ASSIGN_UNLIMITED_ATTEMPTS && ((int) $maxattempts < 1 || (int) $maxattempts > 30))
+            ) {
+                $errors['maxattempts'][] = get_string('invalidmaxattemptsoverride', 'assign');
+            }
+        }
 
         // Ensure at least one of userid or groupid is set (an override must target either a user or a group).
         if (empty($formdata->userid) && empty($formdata->groupid)) {
@@ -360,7 +373,7 @@ class override_manager {
         $datatoset['assignid'] = $this->assign->id;
 
         // Validate the data.
-        $errors = $this->validate_data($datatoset);
+        $errors = $this->validate_data($override);
         if (!empty($errors)) {
             $errorstr = implode(',', $errors);
             throw new invalid_parameter_exception($errorstr);

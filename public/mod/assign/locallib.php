@@ -1038,8 +1038,11 @@ class assign {
 
         $override = $this->override_exists($userid);
 
+        // Unlike dates, the attempt limit needs no per-user calculation. Reset it after an override is removed.
+        $this->get_instance($userid)->maxattempts = $override->maxattempts ?? $this->get_default_instance()->maxattempts;
+
         // Merge with assign defaults.
-        $keys = array('duedate', 'cutoffdate', 'allowsubmissionsfromdate', 'timelimit');
+        $keys = ['duedate', 'cutoffdate', 'allowsubmissionsfromdate', 'timelimit'];
         foreach ($keys as $key) {
             if (isset($override->{$key})) {
                 $this->get_instance($userid)->{$key} = $override->{$key};
@@ -1107,6 +1110,7 @@ class assign {
         // desired behaviour as per the algorithm.
         return (object)array_merge(
             ['timelimit' => null, 'duedate' => null, 'cutoffdate' => null, 'allowsubmissionsfromdate' => null],
+            ['maxattempts' => null],
             $getgroupoverride($userid),
             $getuseroverride($userid)
         );
@@ -5161,10 +5165,7 @@ class assign {
             $jsparams['removesubmission'] = has_capability('mod/assign:editothersubmission', $this->context);
             $jsparams['extend'] = $this->get_instance()->duedate && has_capability('mod/assign:grantextension', $this->context);
 
-            $multipleattemptsallowed = $this->get_instance()->maxattempts > 1
-                || $this->get_instance()->maxattempts == ASSIGN_UNLIMITED_ATTEMPTS;
-            $jsparams['grantattempt'] =
-                $multipleattemptsallowed && $this->get_instance()->attemptreopenmethod == ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL;
+            $jsparams['grantattempt'] = $this->has_bulk_grant_attempt_available($users);
 
             $jsparams['pluginoperations'] = [];
             foreach ($this->get_feedback_plugins() as $plugin) {
@@ -5614,6 +5615,7 @@ class assign {
 
         // Get the list of users.
         $userlist = explode(',', $selectedusers);
+        $maxattempts = $operation === 'addattempt' ? $this->get_effective_maxattempts($userlist) : [];
 
         $prefix = 'plugingradingbatchoperation_';
 
@@ -5647,14 +5649,14 @@ class assign {
                     $this->process_remove_submission($userid);
                 } else if ($operation == 'addattempt') {
                     if (!$this->get_instance()->teamsubmission) {
-                        $this->process_add_attempt($userid);
+                        $this->process_add_attempt($userid, $maxattempts[$userid]);
                     }
                 }
             }
         }
         if ($this->get_instance()->teamsubmission && $operation == 'addattempt') {
             // This needs to be handled separately so that each team submission is only re-opened one time.
-            $this->process_add_attempt_group($userlist);
+            $this->process_add_attempt_group($userlist, $maxattempts);
         }
 
         return 'grading';
@@ -9237,27 +9239,31 @@ class assign {
         }
 
         // Do not show if we are editing a previous attempt.
-        if (($attemptnumber == -1 || ($attemptnumber + 1) == count($this->get_all_submissions($userid))) &&
-                ($this->get_instance()->maxattempts > 1 || $this->get_instance()->maxattempts == ASSIGN_UNLIMITED_ATTEMPTS)) {
+        $this->update_effective_access($userid);
+        $instance = $this->get_instance($userid);
+        if (
+                ($attemptnumber == -1 || ($attemptnumber + 1) == count($this->get_all_submissions($userid))) &&
+                ($instance->maxattempts > 1 || $instance->maxattempts == ASSIGN_UNLIMITED_ATTEMPTS)
+        ) {
             $mform->addElement('header', 'attemptsettings', get_string('attemptsettings', 'assign'));
-            $attemptreopenmethod = get_string('attemptreopenmethod_' . $this->get_instance()->attemptreopenmethod, 'assign');
+            $attemptreopenmethod = get_string('attemptreopenmethod_' . $instance->attemptreopenmethod, 'assign');
             $mform->addElement('static', 'attemptreopenmethod', get_string('attemptreopenmethod', 'assign'), $attemptreopenmethod);
 
             $attemptnumber = 0;
             if ($submission) {
                 $attemptnumber = $submission->attemptnumber;
             }
-            $maxattempts = $this->get_instance()->maxattempts;
+            $maxattempts = $instance->maxattempts;
             if ($maxattempts == ASSIGN_UNLIMITED_ATTEMPTS) {
                 $maxattempts = get_string('unlimitedattempts', 'assign');
             }
             $mform->addelement('static', 'maxattemptslabel', get_string('maxattempts', 'assign'), $maxattempts);
             $mform->addelement('static', 'attemptnumberlabel', get_string('attemptnumber', 'assign'), $attemptnumber + 1);
 
-            $ismanual = $this->get_instance()->attemptreopenmethod == ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL;
+            $ismanual = $instance->attemptreopenmethod == ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL;
             $issubmission = !empty($submission);
-            $isunlimited = $this->get_instance()->maxattempts == ASSIGN_UNLIMITED_ATTEMPTS;
-            $islessthanmaxattempts = $issubmission && ($submission->attemptnumber < ($this->get_instance()->maxattempts-1));
+            $isunlimited = $instance->maxattempts == ASSIGN_UNLIMITED_ATTEMPTS;
+            $islessthanmaxattempts = $issubmission && ($submission->attemptnumber < ($instance->maxattempts - 1));
 
             if ($ismanual && (!$issubmission || $isunlimited || $islessthanmaxattempts)) {
                 $mform->addElement('selectyesno', 'addattempt', get_string('addattempt', 'assign'));
@@ -10173,10 +10179,7 @@ class assign {
      * @return bool - true if another attempt was added.
      */
     protected function reopen_submission_if_required($userid, $submission, $addattempt) {
-        $instance = $this->get_instance();
-        $maxattemptsreached = !empty($submission) &&
-                              $submission->attemptnumber >= ($instance->maxattempts - 1) &&
-                              $instance->maxattempts != ASSIGN_UNLIMITED_ATTEMPTS;
+        $instance = $this->get_default_instance();
         $shouldreopen = false;
         switch ($instance->attemptreopenmethod) {
             case ASSIGN_ATTEMPT_REOPEN_METHOD_AUTOMATIC:
@@ -10203,11 +10206,18 @@ class assign {
                 }
                 break;
         }
-        if ($shouldreopen && !$maxattemptsreached) {
-            $this->add_attempt($userid);
-            return true;
+
+        if (!$shouldreopen) {
+            return false;
         }
-        return false;
+
+        $override = $this->override_exists($userid);
+        $maxattempts = $override->maxattempts ?? $instance->maxattempts;
+        $maxattemptsreached = !empty($submission) &&
+                              $submission->attemptnumber >= ($maxattempts - 1) &&
+                              $maxattempts != ASSIGN_UNLIMITED_ATTEMPTS;
+
+        return !$maxattemptsreached && $this->add_attempt($userid, $maxattempts);
     }
 
     /**
@@ -10405,10 +10415,11 @@ class assign {
      * at most 1 time.
      *
      * @param array $useridlist Array of userids to reopen.
+     * @param array $maxattempts Effective maximum attempts keyed by user ID.
      * @return bool
      */
-    protected function process_add_attempt_group($useridlist) {
-        $groupsprocessed = array();
+    protected function process_add_attempt_group($useridlist, array $maxattempts = []) {
+        $groupsprocessed = [];
         $result = true;
 
         foreach ($useridlist as $userid) {
@@ -10424,7 +10435,7 @@ class assign {
                 // and when deciding if we need to update the gradebook with an edited grade.
                 $currentsubmission = $this->get_group_submission($userid, 0, false, -1);
                 $this->set_most_recent_team_submission($currentsubmission);
-                $result = $this->process_add_attempt($userid) && $result;
+                $result = $this->process_add_attempt($userid, $maxattempts[$userid] ?? null) && $result;
                 $groupsprocessed[$groupid] = true;
             }
         }
@@ -10432,32 +10443,121 @@ class assign {
     }
 
     /**
+     * Get the effective maximum attempt limit for each listed user.
+     *
+     * A user override takes priority over group overrides. If several group overrides apply,
+     * the override with the lowest sort order takes priority. A null value inherits the
+     * assignment default.
+     *
+     * @param array $useridlist User IDs to resolve.
+     * @return array Effective maximum attempts keyed by user ID.
+     */
+    protected function get_effective_maxattempts(array $useridlist): array {
+        global $DB;
+
+        if (!$useridlist) {
+            return [];
+        }
+
+        $useridlist = array_values(array_unique(array_map('intval', $useridlist)));
+        $instance = $this->get_default_instance();
+        $manager = new \mod_assign\override_manager($instance, $this->context);
+        $overrides = $manager->get_all_overrides();
+        $useroverrides = [];
+        $groupoverrides = [];
+
+        foreach ($overrides as $override) {
+            if ($override->userid) {
+                $useroverrides[$override->userid] = $override;
+            } else if ($override->groupid) {
+                $groupoverrides[$override->groupid] = $override;
+            }
+        }
+
+        $selectedgroups = [];
+        if ($groupoverrides) {
+            [$groupsql, $groupparams] = $DB->get_in_or_equal(array_keys($groupoverrides), SQL_PARAMS_NAMED, 'attemptgroup');
+            [$usersql, $userparams] = $DB->get_in_or_equal($useridlist, SQL_PARAMS_NAMED, 'attemptuser');
+            $memberships = $DB->get_records_select(
+                'groups_members',
+                "groupid $groupsql AND userid $usersql",
+                array_merge($groupparams, $userparams),
+                '',
+                'id, groupid, userid'
+            );
+            foreach ($memberships as $membership) {
+                $override = $groupoverrides[$membership->groupid];
+                $selected = $selectedgroups[$membership->userid] ?? null;
+                if (!$selected || $override->sortorder < $selected->sortorder) {
+                    $selectedgroups[$membership->userid] = $override;
+                }
+            }
+        }
+
+        $result = [];
+        foreach ($useridlist as $userid) {
+            $override = $useroverrides[$userid] ?? $selectedgroups[$userid] ?? null;
+            $result[$userid] = $override->maxattempts ?? $instance->maxattempts;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Check whether the bulk grant attempt action should be available for the listed users.
+     *
+     * @param array $useridlist Array of userids visible in the grading table.
+     * @return bool
+     */
+    protected function has_bulk_grant_attempt_available(array $useridlist): bool {
+        $instance = $this->get_default_instance();
+        if (!$useridlist || $instance->attemptreopenmethod != ASSIGN_ATTEMPT_REOPEN_METHOD_MANUAL) {
+            return false;
+        }
+
+        foreach ($this->get_effective_maxattempts($useridlist) as $maxattempts) {
+            if ($maxattempts > 1 || $maxattempts == ASSIGN_UNLIMITED_ATTEMPTS) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Check for a sess key and then call add_attempt.
      *
      * @param int $userid int The user to add the attempt for
+     * @param int|null $maxattempts Effective maximum attempts, or null to resolve it.
      * @return bool - true if successful.
      */
-    protected function process_add_attempt($userid) {
+    protected function process_add_attempt($userid, ?int $maxattempts = null) {
         require_sesskey();
 
-        return $this->add_attempt($userid);
+        return $this->add_attempt($userid, $maxattempts);
     }
 
     /**
      * Add a new attempt for a user.
      *
      * @param int $userid int The user to add the attempt for
+     * @param int|null $maxattempts Effective maximum attempts, or null to resolve it.
      * @return bool - true if successful.
      */
-    protected function add_attempt($userid) {
+    protected function add_attempt($userid, ?int $maxattempts = null) {
         require_capability('mod/assign:grade', $this->context);
+        $instance = $this->get_default_instance();
+        if ($maxattempts === null) {
+            $override = $this->override_exists($userid);
+            $maxattempts = $override->maxattempts ?? $instance->maxattempts;
+        }
 
         // If additional attempts are disallowed.
-        if ($this->get_instance()->maxattempts == 1) {
+        if ($maxattempts == 1) {
             return false;
         }
 
-        if ($this->get_instance()->teamsubmission) {
+        if ($instance->teamsubmission) {
             $oldsubmission = $this->get_group_submission($userid, 0, false);
         } else {
             $oldsubmission = $this->get_user_submission($userid, false);
@@ -10468,13 +10568,15 @@ class assign {
         }
 
         // No more than max attempts allowed.
-        if ($this->get_instance()->maxattempts != ASSIGN_UNLIMITED_ATTEMPTS &&
-            $oldsubmission->attemptnumber >= ($this->get_instance()->maxattempts - 1)) {
+        if (
+                $maxattempts != ASSIGN_UNLIMITED_ATTEMPTS &&
+                $oldsubmission->attemptnumber >= ($maxattempts - 1)
+        ) {
             return false;
         }
 
         // Create the new submission record for the group/user.
-        if ($this->get_instance()->teamsubmission) {
+        if ($instance->teamsubmission) {
             if (isset($this->mostrecentteamsubmission)) {
                 // Team submissions can end up in this function for each user (via save_grade). We don't want to create
                 // more than one attempt for the whole team.
@@ -10502,7 +10604,7 @@ class assign {
             }
         }
 
-        $this->update_submission($newsubmission, $userid, false, $this->get_instance()->teamsubmission);
+        $this->update_submission($newsubmission, $userid, false, $instance->teamsubmission);
         $flags = $this->get_user_flags($userid, false);
         if (isset($flags->locked) && $flags->locked) { // May not exist.
             $this->process_unlock_submission($userid);

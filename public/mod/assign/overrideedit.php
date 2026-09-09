@@ -100,7 +100,7 @@ if ($overrideid) {
 }
 
 // Merge assign defaults with data.
-$keys = array('duedate', 'cutoffdate', 'allowsubmissionsfromdate', 'timelimit');
+$keys = ['duedate', 'cutoffdate', 'allowsubmissionsfromdate', 'timelimit', 'maxattempts'];
 foreach ($keys as $key) {
     if (!isset($data->{$key}) || $reset) {
         $data->{$key} = $assigninstance->{$key};
@@ -167,6 +167,7 @@ if ($mform->is_cancelled()) {
         'cutoffdate' => $fromform->cutoffdate ?? null,
         'allowsubmissionsfromdate' => $fromform->allowsubmissionsfromdate ?? null,
         'timelimit' => $fromform->timelimit ?? null,
+        'maxattempts' => $fromform->maxattempts ?? null,
         'reason' => $fromform->reason ?? null,
         'reasonformat' => $fromform->reasonformat ?? FORMAT_MOODLE,
     ];

@@ -292,6 +292,14 @@ class assign_override_form extends moodleform {
             $mform->setDefault('timelimit', $assigninstance->timelimit);
         }
 
+        // Number of attempts.
+        $attemptoptions = [ASSIGN_UNLIMITED_ATTEMPTS => get_string('unlimitedattempts', 'mod_assign')];
+        $attemptoptions += array_combine(range(1, 30), range(1, 30));
+        $mform->addElement('select', 'maxattempts', get_string('maxattempts', 'mod_assign'), $attemptoptions);
+        $mform->addHelpButton('maxattempts', 'maxattempts', 'assign');
+        $mform->setDefault('maxattempts', $assigninstance->maxattempts);
+        $mform->setType('maxattempts', PARAM_INT);
+
         // Reason for override.
         $editoroptions = [
             'maxfiles' => 0,
@@ -395,7 +403,7 @@ class assign_override_form extends moodleform {
 
         // Ensure that at least one assign setting was changed.
         $changed = false;
-        $keys = array('duedate', 'cutoffdate', 'allowsubmissionsfromdate', 'timelimit');
+        $keys = ['duedate', 'cutoffdate', 'allowsubmissionsfromdate', 'timelimit', 'maxattempts'];
         foreach ($keys as $key) {
             if (isset($data[$key]) && $data[$key] != $assigninstance->{$key}) {
                 $changed = true;

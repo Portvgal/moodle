@@ -335,6 +335,29 @@ final class externallib_test extends \mod_assign\externallib_advanced_testcase {
     }
 
     /**
+     * Students must receive their effective limit through the mobile assignment service.
+     *
+     * @covers \mod_assign_external::get_assignments
+     */
+    public function test_get_assignments_effective_maxattempts(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $student = $generator->create_and_enrol($course, 'student');
+        $otherstudent = $generator->create_and_enrol($course, 'student');
+        $assign = $generator->create_module('assign', ['course' => $course->id, 'maxattempts' => 1]);
+        $manager = new \mod_assign\override_manager($assign, \context_module::instance($assign->cmid));
+        $manager->save_overrides([['userid' => $student->id, 'maxattempts' => 4]]);
+        foreach ([$student->id => 4, $otherstudent->id => 1] as $userid => $expected) {
+            $this->setUser($userid);
+            $result = mod_assign_external::get_assignments([$course->id]);
+            $result = external_api::clean_returnvalue(mod_assign_external::get_assignments_returns(), $result);
+            $this->assertEquals($expected, $result['courses'][0]['assignments'][0]['maxattempts']);
+        }
+    }
+
+    /**
      * Test that get_assignments returns the effective override-adjusted dates for a student with an override,
      * not the assignment's default dates.
      */

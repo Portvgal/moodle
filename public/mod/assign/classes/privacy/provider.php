@@ -84,6 +84,7 @@ class provider implements
                 'allowsubmissionsfromdate' => 'allowsubmissionsfromdate',
                 'duedate' => 'duedate',
                 'cutoffdate' => 'cutoffdate',
+                'maxattempts' => 'maxattempts',
                 'reason' => 'privacy:metadata:assignoverrides:reason',
         ];
         $assignsubmission = [
@@ -703,6 +704,10 @@ class provider implements
             }
             if (!empty($overrides->allowsubmissionsfromdate)) {
                 $data->allowsubmissionsfromdate = transform::datetime($overrides->allowsubmissionsfromdate);
+            }
+            if (isset($overrides->maxattempts)) {
+                $data->maxattempts = $overrides->maxattempts == ASSIGN_UNLIMITED_ATTEMPTS ?
+                    get_string('unlimitedattempts', 'mod_assign') : $overrides->maxattempts;
             }
             if (!empty($overrides->reason)) {
                 $format = $overrides->reasonformat ?? FORMAT_MOODLE;

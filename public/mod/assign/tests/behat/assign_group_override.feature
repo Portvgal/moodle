@@ -40,15 +40,24 @@ Feature: Assign group override
     And I select "Group overrides" from the "jump" singleselect
     And I press "Add group override"
     And I set the following fields to these values:
-      | Override group | Group 1              |
-      | Due date       | ##1 Jan 2020 08:00## |
+      | Override group   | Group 1              |
+      | Due date         | ##1 Jan 2020 08:00## |
+      | Allowed attempts | 4                    |
     And I press "Save"
     Then I should see "Wednesday, 1 January 2020, 8:00"
+    And I should see "Allowed attempts"
+    And I should see "4"
     And I click on "Edit" "link" in the "Group 1" "table_row"
+    And the field "Allowed attempts" matches value "4"
     And I set the following fields to these values:
-      | Due date       | ##1 Jan 2030 08:00## |
+      | Due date         | ##1 Jan 2030 08:00## |
+      | Allowed attempts | 5                    |
     And I press "Save"
     And I should see "Tuesday, 1 January 2030, 8:00"
+    And I should see "5"
+    And I click on "Edit" "link" in the "Group 1" "table_row"
+    And the field "Allowed attempts" matches value "5"
+    And I press "Cancel"
     And I click on "Delete" "link"
     And I press "Continue"
     And I should not see "Group 1"
